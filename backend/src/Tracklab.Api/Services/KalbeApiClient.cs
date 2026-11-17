@@ -27,6 +27,12 @@ public class KalbeApiClient
         _logger = logger;
     }
 
+    private string AuthPath(string subpath) =>
+        $"{(_settings.PathAuthentication ?? "/api/v1/authentication").TrimEnd('/')}/{subpath.TrimStart('/')}";
+
+    private string FeaturePath(string subpath) =>
+        $"{(_settings.PathFeature ?? "/api/v1/feature").TrimEnd('/')}/{subpath.TrimStart('/')}";
+
     private void AddAppHeaders(HttpRequestMessage req)
     {
         req.Headers.TryAddWithoutValidation("app_id", _settings.AppId);
@@ -57,7 +63,7 @@ public class KalbeApiClient
             moduleCode = "ALL"
         }, _jsonOptions);
 
-        var req = new HttpRequestMessage(HttpMethod.Post, "/api/v1/feature/auth/login")
+        var req = new HttpRequestMessage(HttpMethod.Post, AuthPath("auth/login"))
         {
             Content = new StringContent(body, Encoding.UTF8, "application/json")
         };
@@ -85,7 +91,7 @@ public class KalbeApiClient
     /// </summary>
     public async Task<KalbeTokenData?> RefreshTokenAsync(string accessToken, string? sessionCookie)
     {
-        var req = new HttpRequestMessage(HttpMethod.Get, "/api/v1/feature/auth/token/refresh?refreshAuthorization=true");
+        var req = new HttpRequestMessage(HttpMethod.Get, AuthPath("auth/token/refresh?refreshAuthorization=true"));
         AddAppHeaders(req);
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         if (!string.IsNullOrEmpty(sessionCookie))
@@ -105,7 +111,7 @@ public class KalbeApiClient
     public async Task LogoutAsync(string user, string accessToken)
     {
         var body = JsonSerializer.Serialize(new { user }, _jsonOptions);
-        var req = new HttpRequestMessage(HttpMethod.Post, "/api/v1/feature/auth/logout")
+        var req = new HttpRequestMessage(HttpMethod.Post, AuthPath("auth/logout"))
         {
             Content = new StringContent(body, Encoding.UTF8, "application/json")
         };
@@ -120,7 +126,7 @@ public class KalbeApiClient
     /// </summary>
     public async Task<KalbePagingData<T>?> GetPagedAsync<T>(string entity, PagingQuery query, string accessToken, IReadOnlySet<string> allowedSortFields)
     {
-        var req = new HttpRequestMessage(HttpMethod.Get, $"/api/v1/feature/{entity}/paging/advance");
+        var req = new HttpRequestMessage(HttpMethod.Get, $"{FeaturePath(entity)}/paging/advance");
         AddAppHeaders(req);
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         PagingHeaderBuilder.Apply(req, query, allowedSortFields);
@@ -138,7 +144,7 @@ public class KalbeApiClient
     /// </summary>
     public async Task<T?> GetByIdAsync<T>(string entity, Guid id, string accessToken)
     {
-        var req = new HttpRequestMessage(HttpMethod.Get, $"/api/v1/feature/{entity}/{id}");
+        var req = new HttpRequestMessage(HttpMethod.Get, $"{FeaturePath(entity)}/{id}");
         AddAppHeaders(req);
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
@@ -156,7 +162,7 @@ public class KalbeApiClient
     public async Task<T?> CreateAsync<T>(string entity, object body, string accessToken)
     {
         var bodyJson = JsonSerializer.Serialize(body, _jsonOptions);
-        var req = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/feature/{entity}")
+        var req = new HttpRequestMessage(HttpMethod.Post, FeaturePath(entity))
         {
             Content = new StringContent(bodyJson, Encoding.UTF8, "application/json")
         };
@@ -177,7 +183,7 @@ public class KalbeApiClient
     public async Task<T?> UpdateAsync<T>(string entity, object body, string accessToken)
     {
         var bodyJson = JsonSerializer.Serialize(body, _jsonOptions);
-        var req = new HttpRequestMessage(HttpMethod.Put, $"/api/v1/feature/{entity}")
+        var req = new HttpRequestMessage(HttpMethod.Put, FeaturePath(entity))
         {
             Content = new StringContent(bodyJson, Encoding.UTF8, "application/json")
         };
@@ -198,7 +204,7 @@ public class KalbeApiClient
     public async Task DeleteAsync(string entity, Guid id, string deletedBy, string accessToken)
     {
         var bodyJson = JsonSerializer.Serialize(new { id, deletedBy, doHardDelete = false }, _jsonOptions);
-        var req = new HttpRequestMessage(HttpMethod.Delete, $"/api/v1/feature/{entity}")
+        var req = new HttpRequestMessage(HttpMethod.Delete, FeaturePath(entity))
         {
             Content = new StringContent(bodyJson, Encoding.UTF8, "application/json")
         };
