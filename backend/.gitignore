@@ -1,0 +1,30 @@
+# Secrets and credentials
+appsettings.Development.json
+secrets.json
+*.user
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Logs
+logs/
+
+# .NET artifacts
+bin/
+obj/
+
+# User-specific files
+*.suo
+*.user
+.vs/
+
+# NuGet
+*.nupkg
+packages/
+
+# Environment files
+.env
+.env.local
+.env.*.local

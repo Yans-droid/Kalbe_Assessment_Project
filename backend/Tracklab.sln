@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{D98BC1AD-447E-40EA-89A4-9B9F2E0FE0C3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tracklab.Api", "src\Tracklab.Api\Tracklab.Api.csproj", "{14492ED2-093E-4480-80B5-B8F5F4F3691E}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{2452282C-23D9-4850-A482-C44CCB46F2D6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tracklab.Tests", "tests\Tracklab.Tests\Tracklab.Tests.csproj", "{02A3244B-DC03-427B-8F7C-F438A8FD7263}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{14492ED2-093E-4480-80B5-B8F5F4F3691E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{14492ED2-093E-4480-80B5-B8F5F4F3691E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{14492ED2-093E-4480-80B5-B8F5F4F3691E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{14492ED2-093E-4480-80B5-B8F5F4F3691E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{02A3244B-DC03-427B-8F7C-F438A8FD7263}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{02A3244B-DC03-427B-8F7C-F438A8FD7263}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{02A3244B-DC03-427B-8F7C-F438A8FD7263}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{02A3244B-DC03-427B-8F7C-F438A8FD7263}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{14492ED2-093E-4480-80B5-B8F5F4F3691E} = {D98BC1AD-447E-40EA-89A4-9B9F2E0FE0C3}
+		{02A3244B-DC03-427B-8F7C-F438A8FD7263} = {2452282C-23D9-4850-A482-C44CCB46F2D6}
+	EndGlobalSection
+EndGlobal

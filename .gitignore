@@ -1,0 +1,35 @@
+# .NET
+backend/src/*/bin/
+backend/src/*/obj/
+backend/tests/*/bin/
+backend/tests/*/obj/
+*.db
+*.db-shm
+*.db-wal
+logs/
+
+# Secrets
+secrets.json
+appsettings.Local.json
+
+# Node
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# Environment
+.env
+.env.local
+.env.*.local
+*.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vs/
+.vscode/
+*.suo
+*.user
+*.swp
