@@ -4,11 +4,12 @@ import React, { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import { cn } from '@/lib/formatters';
 
 const pageTitles: Record<string, string> = {
-  '/trackers': 'Master Trackers',
-  '/requests': 'Transaction Requests',
-  '/trackings': 'Transaction Trackings',
+  '/trackers': 'Master Tracker',
+  '/requests': 'Lab Analysis Request',
+  '/trackings': 'Tracking Progress',
 };
 
 export default function ProtectedLayout({
@@ -19,14 +20,26 @@ export default function ProtectedLayout({
   const pathname = usePathname();
   const title = pageTitles[pathname] || 'TRACKLAB';
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      <Sidebar mobileOpen={sidebarOpen} onMobileClose={() => setSidebarOpen(false)} />
-      {/* Offset for fixed sidebar on desktop */}
-      <div className="flex-1 flex flex-col overflow-hidden lg:pl-64">
+    <div className="min-h-screen bg-[#f8fafc] flex flex-col antialiased">
+      <Sidebar
+        mobileOpen={sidebarOpen}
+        onMobileClose={() => setSidebarOpen(false)}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
+      />
+
+      {/* Offset container for desktop sidebar */}
+      <div
+        className={cn(
+          'flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out',
+          sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-64'
+        )}
+      >
         <Header title={title} onMenuClick={() => setSidebarOpen(true)} />
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6">{children}</main>
+        <main className="flex-1 p-4 sm:p-6 max-w-7xl w-full mx-auto">{children}</main>
       </div>
     </div>
   );

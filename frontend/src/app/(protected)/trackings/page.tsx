@@ -3,8 +3,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Copy, Check, Edit2, Trash2 } from 'lucide-react';
+import { Copy, Check } from 'lucide-react';
 import DataTable, { Column } from '@/components/DataTable';
+import ActionMenu from '@/components/ActionMenu';
 import FormDialog from '@/components/FormDialog';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { useToast } from '@/components/Toast';
@@ -173,7 +174,7 @@ export default function TrackingsPage() {
   const onSubmit = async (formData: TrackingFormData) => {
     try {
       const payload = {
-        trackerCode: formData.trackerCode.trim(),
+        trackerCode: formData.trackerCode?.trim() || null,
         value: formData.value?.trim() || null,
         trackerId: formData.trackerId.trim(),
         requestId: formData.requestId.trim(),
@@ -189,13 +190,13 @@ export default function TrackingsPage() {
             isActive: true,
           }),
         });
-        showToast('success', `Tracking updated successfully.`);
+        showToast('success', 'Tracking updated successfully.');
       } else {
         await apiFetch('/api/trackings', {
           method: 'POST',
           body: JSON.stringify(payload),
         });
-        showToast('success', `Tracking created successfully.`);
+        showToast('success', 'Tracking created successfully.');
       }
       setFormOpen(false);
       setEditingItem(null);
@@ -208,6 +209,16 @@ export default function TrackingsPage() {
 
   const columns: Column<TrackingItem>[] = [
     {
+      key: 'actions',
+      label: 'Action',
+      render: (item) => (
+        <ActionMenu
+          onEdit={() => handleOpenEdit(item)}
+          onDelete={() => handleOpenDelete(item)}
+        />
+      ),
+    },
+    {
       key: 'trackerCode',
       label: 'Tracker Code',
       sortable: true,
@@ -218,25 +229,22 @@ export default function TrackingsPage() {
     {
       key: 'value',
       label: 'Value',
-      sortable: true,
-      render: (item) => (
-        <span className="text-gray-700">{item.value || '-'}</span>
-      ),
+      render: (item) => <span className="text-gray-700">{item.value || '-'}</span>,
     },
     {
-      key: 'requestId',
-      label: 'Request ID',
-      sortable: true,
+      key: 'trackerId',
+      label: 'Tracker ID',
       render: (item) => (
-        <div className="flex items-center gap-1.5 font-mono text-xs text-gray-600">
-          <span>{truncateUuid(item.requestId)}</span>
+        <div className="flex items-center gap-1.5 font-mono text-xs text-gray-600" title={item.trackerId}>
+          <span>{truncateUuid(item.trackerId, 14)}</span>
           <button
-            onClick={() => copyToClipboard(item.requestId, `req-${item.id}`)}
+            type="button"
+            onClick={() => copyToClipboard(item.trackerId, `trk-${item.id}`)}
             className="p-1 text-gray-400 hover:text-gray-700 rounded transition-colors"
-            title="Copy Request ID"
+            title="Copy Tracker ID"
           >
-            {copiedId === `req-${item.id}` ? (
-              <Check className="w-3.5 h-3.5 text-kalbe-500" />
+            {copiedId === `trk-${item.id}` ? (
+              <Check className="w-3.5 h-3.5 text-[#008444]" />
             ) : (
               <Copy className="w-3.5 h-3.5" />
             )}
@@ -245,19 +253,19 @@ export default function TrackingsPage() {
       ),
     },
     {
-      key: 'trackerId',
-      label: 'Tracker ID',
-      sortable: true,
+      key: 'requestId',
+      label: 'Request ID',
       render: (item) => (
-        <div className="flex items-center gap-1.5 font-mono text-xs text-gray-600">
-          <span>{truncateUuid(item.trackerId)}</span>
+        <div className="flex items-center gap-1.5 font-mono text-xs text-gray-600" title={item.requestId}>
+          <span>{truncateUuid(item.requestId, 14)}</span>
           <button
-            onClick={() => copyToClipboard(item.trackerId, `trk-${item.id}`)}
+            type="button"
+            onClick={() => copyToClipboard(item.requestId, `req-${item.id}`)}
             className="p-1 text-gray-400 hover:text-gray-700 rounded transition-colors"
-            title="Copy Tracker ID"
+            title="Copy Request ID"
           >
-            {copiedId === `trk-${item.id}` ? (
-              <Check className="w-3.5 h-3.5 text-kalbe-500" />
+            {copiedId === `req-${item.id}` ? (
+              <Check className="w-3.5 h-3.5 text-[#008444]" />
             ) : (
               <Copy className="w-3.5 h-3.5" />
             )}
@@ -269,54 +277,21 @@ export default function TrackingsPage() {
       key: 'partnerId',
       label: 'Partner ID',
       render: (item) => (
-        <div className="flex items-center gap-1.5 text-xs text-gray-600">
-          <span>{item.partnerId ? truncateUuid(item.partnerId) : '-'}</span>
-          {item.partnerId && (
-            <button
-              onClick={() => copyToClipboard(item.partnerId!, `partner-${item.id}`)}
-              className="p-1 text-gray-400 hover:text-gray-700 rounded transition-colors"
-              title="Copy Partner ID"
-            >
-              {copiedId === `partner-${item.id}` ? (
-                <Check className="w-3.5 h-3.5 text-kalbe-500" />
-              ) : (
-                <Copy className="w-3.5 h-3.5" />
-              )}
-            </button>
-          )}
-        </div>
-      ),
-    },
-    {
-      key: 'actions',
-      label: 'Actions',
-      render: (item) => (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => handleOpenEdit(item)}
-            className="p-1.5 text-gray-500 hover:text-kalbe-600 hover:bg-kalbe-50 rounded transition-colors"
-            title="Edit"
-          >
-            <Edit2 className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => handleOpenDelete(item)}
-            className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-            title="Delete"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+        <div className="flex items-center gap-1.5 text-xs text-gray-500" title={item.partnerId || ''}>
+          <span>{item.partnerId ? truncateUuid(item.partnerId, 14) : '-'}</span>
         </div>
       ),
     },
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Transaction Trackings</h2>
-          <p className="text-sm text-gray-500 mt-1">
+          <h2 className="text-xl sm:text-2xl font-extrabold text-gray-900 tracking-tight">
+            Tracking Progress
+          </h2>
+          <p className="text-xs text-gray-500 mt-0.5">
             Associate trackers with customer requests and log step values.
           </p>
         </div>
@@ -331,8 +306,8 @@ export default function TrackingsPage() {
         searchValue={search}
         onSearch={handleSearch}
         onAdd={handleOpenAdd}
-        addLabel="Add Tracking"
-        emptyMessage="No transaction trackings found. Click 'Add Tracking' to create one."
+        addLabel="Add"
+        emptyMessage="No transaction trackings found. Click '+ Add' to create one."
         sort={{
           sortBy,
           sortOrder,
@@ -359,33 +334,33 @@ export default function TrackingsPage() {
         onSubmit={handleSubmit(onSubmit)}
         loading={isSubmitting}
       >
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 max-h-[75vh] overflow-y-auto px-1">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label htmlFor="trackerCode" className="label-text">
+              <label htmlFor="trackerCode" className="label-text text-xs font-semibold">
                 Tracker Code <span className="text-red-500">*</span>
               </label>
               <input
                 id="trackerCode"
                 type="text"
                 {...register('trackerCode')}
-                className={`input-field ${errors.trackerCode ? 'input-error' : ''}`}
+                className={`input-field text-xs ${errors.trackerCode ? 'input-error' : ''}`}
                 placeholder="e.g. TRK-01"
               />
               {errors.trackerCode && (
-                <p className="error-text">{errors.trackerCode.message}</p>
+                <p className="error-text text-xs">{errors.trackerCode.message}</p>
               )}
             </div>
 
             <div>
-              <label htmlFor="value" className="label-text">
+              <label htmlFor="value" className="label-text text-xs font-semibold">
                 Value
               </label>
               <input
                 id="value"
                 type="text"
                 {...register('value')}
-                className="input-field"
+                className="input-field text-xs"
                 placeholder="Value / status description"
               />
             </div>
@@ -393,7 +368,7 @@ export default function TrackingsPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label htmlFor="trackerId" className="label-text">
+              <label htmlFor="trackerId" className="label-text text-xs font-semibold">
                 Tracker ID (UUID) <span className="text-red-500">*</span>
               </label>
               <input
@@ -404,12 +379,12 @@ export default function TrackingsPage() {
                 placeholder="Target tracker UUID"
               />
               {errors.trackerId && (
-                <p className="error-text">{errors.trackerId.message}</p>
+                <p className="error-text text-xs">{errors.trackerId.message}</p>
               )}
             </div>
 
             <div>
-              <label htmlFor="requestId" className="label-text">
+              <label htmlFor="requestId" className="label-text text-xs font-semibold">
                 Request ID (UUID) <span className="text-red-500">*</span>
               </label>
               <input
@@ -420,13 +395,13 @@ export default function TrackingsPage() {
                 placeholder="Target request UUID"
               />
               {errors.requestId && (
-                <p className="error-text">{errors.requestId.message}</p>
+                <p className="error-text text-xs">{errors.requestId.message}</p>
               )}
             </div>
           </div>
 
           <div>
-            <label htmlFor="partnerId" className="label-text">
+            <label htmlFor="partnerId" className="label-text text-xs font-semibold">
               Partner ID (UUID)
             </label>
             <input

@@ -8,6 +8,8 @@ export interface Column<T> {
   key: string;
   label: string;
   sortable?: boolean;
+  align?: 'left' | 'center' | 'right';
+  className?: string;
   render?: (item: T) => React.ReactNode;
 }
 
@@ -37,6 +39,8 @@ interface DataTableProps<T> {
   emptyMessage?: string;
   onAdd?: () => void;
   addLabel?: string;
+  filterButton?: React.ReactNode;
+  extraActions?: React.ReactNode;
   error?: string | null;
   onRetry?: () => void;
 }
@@ -52,6 +56,8 @@ export default function DataTable<T extends Record<string, unknown>>({
   emptyMessage = 'No data found.',
   onAdd,
   addLabel = 'Add New',
+  filterButton,
+  extraActions,
   error,
   onRetry,
 }: DataTableProps<T>) {
@@ -83,49 +89,80 @@ export default function DataTable<T extends Record<string, unknown>>({
     if (!column.sortable || !sort) return null;
     if (sort.sortBy === column.key) {
       return sort.sortOrder === 'ASC' ? (
-        <ChevronUp className="w-4 h-4" />
+        <ChevronUp className="w-3.5 h-3.5 text-white" />
       ) : (
-        <ChevronDown className="w-4 h-4" />
+        <ChevronDown className="w-3.5 h-3.5 text-white" />
       );
     }
-    return <ChevronsUpDown className="w-4 h-4 opacity-40" />;
+    return <ChevronsUpDown className="w-3.5 h-3.5 text-white/50" />;
   };
 
   const pageSizes = [10, 25, 50];
 
+  const totalItems = pagination?.totalItems || 0;
+  const page = pagination?.page || 1;
+  const pageSize = pagination?.pageSize || 10;
+  const from = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
+  const to = Math.min(page * pageSize, totalItems);
+
   return (
     <div className="card overflow-hidden">
-      {/* Toolbar */}
-      <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="relative flex-1 max-w-sm">
+      {/* Toolbar Atas */}
+      <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white">
+        {/* Kiri: Show [10/25/50] + Filter By + Search */}
+        <div className="flex flex-wrap items-center gap-2.5 flex-1 min-w-0">
+          {pagination && (
+            <div className="flex items-center gap-1.5 text-xs text-gray-500 flex-shrink-0">
+              <span className="font-medium">Show</span>
+              <select
+                value={pagination.pageSize}
+                onChange={(e) => pagination.onPageSizeChange(Number(e.target.value))}
+                className="input-field w-auto py-1 px-2 text-xs font-semibold bg-white border-gray-300 rounded-md"
+              >
+                {pageSizes.map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {filterButton}
+
           {onSearch && (
-            <>
+            <div className="relative flex-1 min-w-[180px] max-w-xs">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
                 placeholder="Search..."
                 value={localSearch}
                 onChange={(e) => handleSearch(e.target.value)}
-                className="input-field pl-9"
+                className="input-field pl-9 py-1.5 text-xs bg-gray-50 focus:bg-white"
               />
-            </>
+            </div>
           )}
         </div>
-        {onAdd && (
-          <button onClick={onAdd} className="btn-primary whitespace-nowrap">
-            <Plus className="w-4 h-4" />
-            {addLabel}
-          </button>
-        )}
+
+        {/* Kanan: Extra Actions (e.g. RFA List) + Tombol Add */}
+        <div className="flex items-center gap-2 flex-shrink-0 justify-end">
+          {extraActions}
+          {onAdd && (
+            <button onClick={onAdd} className="btn-primary py-1.5 px-3 text-xs whitespace-nowrap">
+              <Plus className="w-4 h-4" />
+              {addLabel}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Error State */}
       {error && (
-        <div className="p-8 text-center">
+        <div className="p-8 text-center bg-white">
           <div className="text-red-500 mb-2 font-medium">Error loading data</div>
           <p className="text-gray-500 text-sm mb-4">{error}</p>
           {onRetry && (
-            <button onClick={onRetry} className="btn-primary">
+            <button onClick={onRetry} className="btn-primary text-xs">
               Retry
             </button>
           )}
@@ -134,35 +171,44 @@ export default function DataTable<T extends Record<string, unknown>>({
 
       {/* Table */}
       {!error && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto relative min-h-[160px]">
+          <table className="w-full text-sm border-collapse">
             <thead>
-              <tr className="bg-kalbe-500 text-white">
+              <tr className="bg-[#008444] text-white">
                 {columns.map((col) => (
                   <th
                     key={col.key}
                     className={cn(
-                      'px-4 py-3 text-left font-semibold whitespace-nowrap',
-                      col.sortable && sort && 'cursor-pointer select-none hover:bg-kalbe-600'
+                      'px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white whitespace-nowrap',
+                      col.sortable && sort && 'cursor-pointer select-none hover:bg-[#006b37] transition-colors',
+                      col.align === 'right' && 'text-right',
+                      col.align === 'center' && 'text-center',
+                      col.className
                     )}
                     onClick={() => col.sortable && sort?.onSort(col.key)}
                   >
-                    <div className="flex items-center gap-1">
-                      {col.label}
+                    <div
+                      className={cn(
+                        'flex items-center gap-1.5',
+                        col.align === 'right' && 'justify-end',
+                        col.align === 'center' && 'justify-center'
+                      )}
+                    >
+                      <span>{col.label}</span>
                       {renderSortIcon(col)}
                     </div>
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-100 bg-white">
               {loading ? (
                 // Skeleton rows
                 Array.from({ length: pagination?.pageSize || 5 }).map((_, i) => (
-                  <tr key={`skeleton-${i}`} className="border-b border-gray-100">
+                  <tr key={`skeleton-${i}`}>
                     {columns.map((col) => (
                       <td key={col.key} className="px-4 py-3">
-                        <div className="h-4 bg-gray-200 rounded animate-pulse w-3/4" />
+                        <div className="h-4 bg-gray-100 rounded animate-pulse w-3/4" />
                       </td>
                     ))}
                   </tr>
@@ -172,7 +218,7 @@ export default function DataTable<T extends Record<string, unknown>>({
                   <td colSpan={columns.length} className="px-4 py-12 text-center text-gray-500">
                     <div className="flex flex-col items-center gap-2">
                       <Search className="w-10 h-10 text-gray-300" />
-                      <p>{emptyMessage}</p>
+                      <p className="text-sm font-medium">{emptyMessage}</p>
                     </div>
                   </td>
                 </tr>
@@ -180,10 +226,18 @@ export default function DataTable<T extends Record<string, unknown>>({
                 data.map((item, index) => (
                   <tr
                     key={(item.id as string) || index}
-                    className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                    className="hover:bg-gray-50/80 transition-colors"
                   >
                     {columns.map((col) => (
-                      <td key={col.key} className="px-4 py-3">
+                      <td
+                        key={col.key}
+                        className={cn(
+                          'px-4 py-3 text-xs text-gray-700',
+                          col.align === 'right' && 'text-right',
+                          col.align === 'center' && 'text-center',
+                          col.className
+                        )}
+                      >
                         {col.render ? col.render(item) : (item[col.key] as React.ReactNode) ?? '-'}
                       </td>
                     ))}
@@ -192,38 +246,35 @@ export default function DataTable<T extends Record<string, unknown>>({
               )}
             </tbody>
           </table>
+
+          {loading && data.length > 0 && (
+            <div className="absolute inset-0 bg-white/60 flex items-center justify-center z-10">
+              <Loader2 className="w-6 h-6 animate-spin text-[#008444]" />
+            </div>
+          )}
         </div>
       )}
 
-      {/* Pagination */}
+      {/* Footer Tabel */}
       {pagination && !error && (
-        <div className="p-4 border-t border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <span>Show</span>
-            <select
-              value={pagination.pageSize}
-              onChange={(e) => pagination.onPageSizeChange(Number(e.target.value))}
-              className="input-field w-auto py-1 px-2"
-            >
-              {pageSizes.map((size) => (
-                <option key={size} value={size}>
-                  {size}
-                </option>
-              ))}
-            </select>
-            <span>of {pagination.totalItems} entries</span>
+        <div className="p-4 border-t border-gray-100 bg-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="text-xs text-gray-600">
+            Showing <span className="font-semibold text-gray-900">{from}</span> to{' '}
+            <span className="font-semibold text-gray-900">{to}</span> of{' '}
+            <span className="font-semibold text-gray-900">{totalItems}</span> entries
           </div>
-          <div className="flex items-center gap-1">
+
+          <div className="flex items-center gap-1 self-center sm:self-auto">
             <button
               onClick={() => pagination.onPageChange(pagination.page - 1)}
               disabled={pagination.page <= 1 || loading}
-              className="btn-secondary py-1 px-3 text-sm"
+              className="btn-secondary py-1 px-2.5 text-xs font-medium disabled:opacity-40"
             >
               Prev
             </button>
             {generatePageNumbers(pagination.page, pagination.totalPages).map((p, i) =>
               p === '...' ? (
-                <span key={`ellipsis-${i}`} className="px-2 text-gray-400">
+                <span key={`ellipsis-${i}`} className="px-2 text-xs text-gray-400">
                   ...
                 </span>
               ) : (
@@ -232,10 +283,10 @@ export default function DataTable<T extends Record<string, unknown>>({
                   onClick={() => pagination.onPageChange(p as number)}
                   disabled={loading}
                   className={cn(
-                    'py-1 px-3 text-sm rounded-lg font-medium transition-colors',
+                    'py-1 px-2.5 text-xs rounded-md font-medium transition-colors',
                     p === pagination.page
-                      ? 'bg-kalbe-500 text-white'
-                      : 'hover:bg-gray-100 text-gray-700'
+                      ? 'bg-[#008444] text-white shadow-sm'
+                      : 'hover:bg-gray-100 text-gray-700 border border-gray-200 bg-white'
                   )}
                 >
                   {p}
@@ -245,17 +296,11 @@ export default function DataTable<T extends Record<string, unknown>>({
             <button
               onClick={() => pagination.onPageChange(pagination.page + 1)}
               disabled={pagination.page >= pagination.totalPages || loading}
-              className="btn-secondary py-1 px-3 text-sm"
+              className="btn-secondary py-1 px-2.5 text-xs font-medium disabled:opacity-40"
             >
               Next
             </button>
           </div>
-        </div>
-      )}
-
-      {loading && data.length > 0 && (
-        <div className="absolute inset-0 bg-white/50 flex items-center justify-center">
-          <Loader2 className="w-6 h-6 animate-spin text-kalbe-500" />
         </div>
       )}
     </div>
