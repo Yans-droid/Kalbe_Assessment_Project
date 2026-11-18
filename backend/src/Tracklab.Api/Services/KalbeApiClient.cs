@@ -218,6 +218,10 @@ public class KalbeApiClient
 
         var page = Math.Max(1, query.Page);
         var limit = Math.Clamp(query.PageSize, 1, 100);
+        if ((page - 1) * limit >= filtered.Count)
+        {
+            page = 1;
+        }
         var pagedItems = filtered.Skip((page - 1) * limit).Take(limit).ToList();
 
         return new KalbePagingData<T>
@@ -260,7 +264,7 @@ public class KalbeApiClient
             }
             if (!string.IsNullOrWhiteSpace(query.IncludeRaw))
             {
-                req.Headers.Add("X-Paging-Include", query.IncludeRaw.Trim());
+                req.Headers.Add("X-Paging-Include", PagingHeaderBuilder.NormalizeToJsonObject(query.IncludeRaw));
             }
         }
         else
@@ -273,14 +277,14 @@ public class KalbeApiClient
     private static string? BuildPascalCaseInclude(List<KeyValuePair<string, string>> filters)
     {
         if (filters.Count == 0) return null;
-        var list = new List<Dictionary<string, string>>();
+        var dict = new Dictionary<string, string>();
         foreach (var f in filters)
         {
             if (string.IsNullOrWhiteSpace(f.Key)) continue;
             var pascalKey = char.ToUpperInvariant(f.Key[0]) + f.Key.Substring(1);
-            list.Add(new Dictionary<string, string> { { pascalKey, f.Value } });
+            dict[pascalKey] = f.Value;
         }
-        var json = JsonSerializer.Serialize(list);
+        var json = JsonSerializer.Serialize(dict);
         return Convert.ToBase64String(Encoding.UTF8.GetBytes(json));
     }
 

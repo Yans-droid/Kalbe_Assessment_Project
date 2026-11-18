@@ -128,16 +128,16 @@ export default function RequestsPage() {
       if (search.trim()) {
         params.append('search', search.trim());
       }
-      // Build Base64 include filters for active filter values
-      const includeFilters: Record<string, string>[] = [];
+      // Build Base64 include filters for active filter values (JSON object for PostgreSQL jsonb_each_text)
+      const filterObj: Record<string, string> = {};
       if (activeFilters.lastStatus) {
-        includeFilters.push({ lastStatus: activeFilters.lastStatus });
+        filterObj.lastStatus = activeFilters.lastStatus;
       }
       if (activeFilters.receivingStatus) {
-        includeFilters.push({ receivingStatus: activeFilters.receivingStatus });
+        filterObj.receivingStatus = activeFilters.receivingStatus;
       }
-      if (includeFilters.length > 0) {
-        params.append('include', btoa(JSON.stringify(includeFilters)));
+      if (Object.keys(filterObj).length > 0) {
+        params.append('include', btoa(JSON.stringify(filterObj)));
       }
 
       const res = await apiFetch<PagingResponse<RequestItem>>(`/api/requests?${params.toString()}`);

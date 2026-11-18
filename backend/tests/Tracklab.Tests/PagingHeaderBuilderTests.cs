@@ -109,7 +109,7 @@ public class PagingHeaderBuilderTests
     }
 
     [Fact]
-    public void Apply_IncludeRaw_PassedDirectly()
+    public void Apply_IncludeRaw_NormalizedToJsonObject()
     {
         var req = new HttpRequestMessage();
         var rawB64 = Convert.ToBase64String(Encoding.UTF8.GetBytes("[{\"lastStatus\":\"SUBMITTED\"}]"));
@@ -117,7 +117,11 @@ public class PagingHeaderBuilderTests
 
         PagingHeaderBuilder.Apply(req, q, AllowedSorts);
 
-        Assert.Equal(rawB64, req.Headers.GetValues("X-Paging-Include").First());
+        var headerVal = req.Headers.GetValues("X-Paging-Include").First();
+        var decoded = Encoding.UTF8.GetString(Convert.FromBase64String(headerVal));
+        Assert.Contains("lastStatus", decoded);
+        Assert.Contains("SUBMITTED", decoded);
+        Assert.StartsWith("{", decoded.Trim());
         Assert.Equal("AND", req.Headers.GetValues("X-Paging-Operator").First());
         Assert.Equal("true", req.Headers.GetValues("X-Paging-IgnoreCase").First());
     }

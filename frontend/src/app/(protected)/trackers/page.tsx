@@ -64,8 +64,14 @@ export default function TrackersPage() {
 
   // Filter By state
   const [filterOpen, setFilterOpen] = useState(false);
+  const [filterCode, setFilterCode] = useState('');
   const [filterActionType, setFilterActionType] = useState('');
-  const [activeFilterActionType, setActiveFilterActionType] = useState('');
+  const [filterModuleFlow, setFilterModuleFlow] = useState('');
+  const [activeFilters, setActiveFilters] = useState<{
+    code?: string;
+    actionType?: string;
+    moduleFlow?: string;
+  }>({});
 
   const {
     register,
@@ -102,8 +108,13 @@ export default function TrackersPage() {
       if (search.trim()) {
         params.append('search', search.trim());
       }
-      if (activeFilterActionType.trim()) {
-        params.append('include', btoa(JSON.stringify([{ actionType: activeFilterActionType.trim() }])));
+      const filterObj: Record<string, string> = {};
+      if (activeFilters.code) filterObj.code = activeFilters.code;
+      if (activeFilters.actionType) filterObj.actionType = activeFilters.actionType;
+      if (activeFilters.moduleFlow) filterObj.moduleFlow = activeFilters.moduleFlow;
+
+      if (Object.keys(filterObj).length > 0) {
+        params.append('include', btoa(JSON.stringify(filterObj)));
       }
 
       const res = await apiFetch<PagingResponse<TrackerItem>>(`/api/trackers?${params.toString()}`);
@@ -116,7 +127,7 @@ export default function TrackersPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, sortBy, sortOrder, search, activeFilterActionType]);
+  }, [page, pageSize, sortBy, sortOrder, search, activeFilters]);
 
   useEffect(() => {
     fetchData();
@@ -138,19 +149,25 @@ export default function TrackersPage() {
   };
 
   const applyFilters = () => {
-    setActiveFilterActionType(filterActionType.trim());
+    setActiveFilters({
+      code: filterCode.trim() || undefined,
+      actionType: filterActionType.trim() || undefined,
+      moduleFlow: filterModuleFlow.trim() || undefined,
+    });
     setPage(1);
     setFilterOpen(false);
   };
 
   const clearFilters = () => {
+    setFilterCode('');
     setFilterActionType('');
-    setActiveFilterActionType('');
+    setFilterModuleFlow('');
+    setActiveFilters({});
     setPage(1);
     setFilterOpen(false);
   };
 
-  const hasActiveFilters = !!activeFilterActionType;
+  const hasActiveFilters = Object.values(activeFilters).some(Boolean);
 
   const handleOpenAdd = () => {
     setEditingItem(null);
@@ -385,7 +402,7 @@ export default function TrackersPage() {
         <span>Filter By</span>
         {hasActiveFilters && (
           <span className="bg-white text-[#008444] rounded-full text-[10px] font-bold px-1.5 py-0.2">
-            1
+            {Object.values(activeFilters).filter(Boolean).length}
           </span>
         )}
       </button>
@@ -429,7 +446,17 @@ export default function TrackersPage() {
               Close
             </button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="label-text text-xs">Tracker Code</label>
+              <input
+                type="text"
+                value={filterCode}
+                onChange={(e) => setFilterCode(e.target.value)}
+                placeholder="e.g. ITSR, TRK"
+                className="input-field text-xs py-1.5"
+              />
+            </div>
             <div>
               <label className="label-text text-xs">Action Type</label>
               <select
@@ -444,20 +471,30 @@ export default function TrackersPage() {
                 <option value="date">date</option>
               </select>
             </div>
-            <div className="flex items-end gap-2">
-              <button
-                type="button"
-                onClick={applyFilters}
-                className="btn-primary py-1.5 px-4 text-xs font-semibold"
-              >
-                Apply
-              </button>
+            <div>
+              <label className="label-text text-xs">Module Flow</label>
+              <input
+                type="text"
+                value={filterModuleFlow}
+                onChange={(e) => setFilterModuleFlow(e.target.value)}
+                placeholder="e.g. REQUEST, ANALYSIS"
+                className="input-field text-xs py-1.5"
+              />
+            </div>
+            <div className="sm:col-span-3 flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
               <button
                 type="button"
                 onClick={clearFilters}
                 className="btn-secondary py-1.5 px-3 text-xs"
               >
                 Clear
+              </button>
+              <button
+                type="button"
+                onClick={applyFilters}
+                className="btn-primary py-1.5 px-4 text-xs font-semibold"
+              >
+                Apply
               </button>
             </div>
           </div>
