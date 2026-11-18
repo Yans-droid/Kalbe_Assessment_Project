@@ -8,5 +8,9 @@ public class PagingQuery
     public string? SortOrder { get; set; }
     public string? Search { get; set; }
     public List<Dictionary<string, string>>? Include { get; set; }
+
+    [Microsoft.AspNetCore.Mvc.FromQuery(Name = "include")]
+    public string? IncludeRaw { get; set; }
+
     public string? Operator { get; set; }
 }

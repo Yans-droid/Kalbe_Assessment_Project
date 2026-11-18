@@ -107,4 +107,18 @@ public class PagingHeaderBuilderTests
         Assert.Equal("OR", req.Headers.GetValues("X-Paging-Operator").First());
         Assert.Equal("true", req.Headers.GetValues("X-Paging-IgnoreCase").First());
     }
+
+    [Fact]
+    public void Apply_IncludeRaw_PassedDirectly()
+    {
+        var req = new HttpRequestMessage();
+        var rawB64 = Convert.ToBase64String(Encoding.UTF8.GetBytes("[{\"lastStatus\":\"SUBMITTED\"}]"));
+        var q = new PagingQuery { Page = 1, PageSize = 10, IncludeRaw = rawB64, Operator = "AND" };
+
+        PagingHeaderBuilder.Apply(req, q, AllowedSorts);
+
+        Assert.Equal(rawB64, req.Headers.GetValues("X-Paging-Include").First());
+        Assert.Equal("AND", req.Headers.GetValues("X-Paging-Operator").First());
+        Assert.Equal("true", req.Headers.GetValues("X-Paging-IgnoreCase").First());
+    }
 }

@@ -22,7 +22,13 @@ public static class PagingHeaderBuilder
         // Default wildcard '%' per verified Kalbe API behaviour
         req.Headers.Add("X-Paging-Search", string.IsNullOrWhiteSpace(q.Search) ? "%" : q.Search.Trim());
 
-        if (q.Include is { Count: > 0 })
+        if (!string.IsNullOrWhiteSpace(q.IncludeRaw))
+        {
+            req.Headers.Add("X-Paging-Include", q.IncludeRaw.Trim());
+            req.Headers.Add("X-Paging-Operator", q.Operator == "AND" ? "AND" : "OR");
+            req.Headers.Add("X-Paging-IgnoreCase", "true");
+        }
+        else if (q.Include is { Count: > 0 })
         {
             var json = JsonSerializer.Serialize(q.Include);
             req.Headers.Add("X-Paging-Include", Convert.ToBase64String(Encoding.UTF8.GetBytes(json)));

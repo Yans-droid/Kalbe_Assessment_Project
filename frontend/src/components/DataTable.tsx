@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ChevronUp, ChevronDown, ChevronsUpDown, Search, Plus, Loader2 } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, Search, Plus, Loader2, X } from 'lucide-react';
 import { cn } from '@/lib/formatters';
 
 export interface Column<T> {
@@ -68,16 +68,44 @@ export default function DataTable<T extends Record<string, unknown>>({
     setLocalSearch(searchValue);
   }, [searchValue]);
 
-  const handleSearch = useCallback(
+  const triggerSearch = useCallback(
     (value: string) => {
-      setLocalSearch(value);
       if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => {
-        onSearch?.(value);
-      }, 300);
+      onSearch?.(value);
     },
     [onSearch]
   );
+
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      setLocalSearch(value);
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+
+      // Instantly search if input is completely cleared
+      if (value === '') {
+        onSearch?.('');
+        return;
+      }
+
+      // 400ms debounce
+      debounceRef.current = setTimeout(() => {
+        onSearch?.(value);
+      }, 400);
+    },
+    [onSearch]
+  );
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      triggerSearch(localSearch);
+    }
+  };
+
+  const handleClearSearch = () => {
+    setLocalSearch('');
+    triggerSearch('');
+  };
 
   useEffect(() => {
     return () => {
@@ -105,6 +133,8 @@ export default function DataTable<T extends Record<string, unknown>>({
   const from = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
   const to = Math.min(page * pageSize, totalItems);
 
+  const isSearchActive = !!searchValue.trim();
+
   return (
     <div className="card overflow-hidden">
       {/* Toolbar Atas */}
@@ -131,15 +161,27 @@ export default function DataTable<T extends Record<string, unknown>>({
           {filterButton}
 
           {onSearch && (
-            <div className="relative flex-1 min-w-[180px] max-w-xs">
+            <div className="relative flex-1 min-w-[200px] max-w-xs">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
                 placeholder="Search..."
                 value={localSearch}
-                onChange={(e) => handleSearch(e.target.value)}
-                className="input-field pl-9 py-1.5 text-xs bg-gray-50 focus:bg-white"
+                onChange={(e) => handleSearchChange(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="input-field pl-9 pr-8 py-1.5 text-xs bg-gray-50 focus:bg-white"
               />
+              {localSearch && (
+                <button
+                  type="button"
+                  onClick={handleClearSearch}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5 rounded"
+                  title="Clear search"
+                  aria-label="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -218,7 +260,25 @@ export default function DataTable<T extends Record<string, unknown>>({
                   <td colSpan={columns.length} className="px-4 py-12 text-center text-gray-500">
                     <div className="flex flex-col items-center gap-2">
                       <Search className="w-10 h-10 text-gray-300" />
-                      <p className="text-sm font-medium">{emptyMessage}</p>
+                      {isSearchActive ? (
+                        <>
+                          <p className="text-sm font-semibold text-gray-800">
+                            No matching records found
+                          </p>
+                          <p className="text-xs text-gray-400 max-w-sm">
+                            No results found matching &ldquo;{searchValue}&rdquo;. Try another keyword or clear the search.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={handleClearSearch}
+                            className="btn-secondary py-1 px-3 text-xs mt-2"
+                          >
+                            Clear Search
+                          </button>
+                        </>
+                      ) : (
+                        <p className="text-sm font-medium">{emptyMessage}</p>
+                      )}
                     </div>
                   </td>
                 </tr>
