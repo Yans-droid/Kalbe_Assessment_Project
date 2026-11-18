@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Copy, Check, Edit2, Trash2 } from 'lucide-react';
+import { Copy, Check, Edit2, Trash2, Filter, X as XIcon } from 'lucide-react';
 import DataTable, { Column } from '@/components/DataTable';
 import FormDialog from '@/components/FormDialog';
 import ConfirmDialog from '@/components/ConfirmDialog';
@@ -71,6 +71,12 @@ export default function RequestsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // Filter By state
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filterLastStatus, setFilterLastStatus] = useState('');
+  const [filterReceivingStatus, setFilterReceivingStatus] = useState('');
+  const [activeFilters, setActiveFilters] = useState<{lastStatus?: string; receivingStatus?: string}>({});
+
   const {
     register,
     handleSubmit,
@@ -121,6 +127,17 @@ export default function RequestsPage() {
       if (search.trim()) {
         params.append('search', search.trim());
       }
+      // Build Base64 include filters for active filter values
+      const includeFilters: Record<string, string>[] = [];
+      if (activeFilters.lastStatus) {
+        includeFilters.push({ lastStatus: activeFilters.lastStatus });
+      }
+      if (activeFilters.receivingStatus) {
+        includeFilters.push({ receivingStatus: activeFilters.receivingStatus });
+      }
+      if (includeFilters.length > 0) {
+        params.append('include', btoa(JSON.stringify(includeFilters)));
+      }
 
       const res = await apiFetch<PagingResponse<RequestItem>>(`/api/requests?${params.toString()}`);
       setData(res.items || []);
@@ -132,7 +149,7 @@ export default function RequestsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, sortBy, sortOrder, search]);
+  }, [page, pageSize, sortBy, sortOrder, search, activeFilters]);
 
   useEffect(() => {
     fetchData();
@@ -152,6 +169,25 @@ export default function RequestsPage() {
     setSearch(val);
     setPage(1);
   };
+
+  const applyFilters = () => {
+    setActiveFilters({
+      lastStatus: filterLastStatus.trim() || undefined,
+      receivingStatus: filterReceivingStatus.trim() || undefined,
+    });
+    setPage(1);
+    setFilterOpen(false);
+  };
+
+  const clearFilters = () => {
+    setFilterLastStatus('');
+    setFilterReceivingStatus('');
+    setActiveFilters({});
+    setPage(1);
+    setFilterOpen(false);
+  };
+
+  const hasActiveFilters = !!(activeFilters.lastStatus || activeFilters.receivingStatus);
 
   const copyToClipboard = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -390,7 +426,67 @@ export default function RequestsPage() {
             Track customer requests, project codes, SLA lead times, and analysis status.
           </p>
         </div>
+        {/* Filter By button */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setFilterOpen(!filterOpen)}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm border transition-colors ${
+              hasActiveFilters
+                ? 'bg-kalbe-500 text-white border-kalbe-500'
+                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+            }`}
+          >
+            <Filter className="w-4 h-4" />
+            Filter By
+            {hasActiveFilters && (
+              <span className="bg-white text-kalbe-600 rounded-full text-xs font-bold px-1.5 py-0.5 leading-none">
+                {Object.values(activeFilters).filter(Boolean).length}
+              </span>
+            )}
+          </button>
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="p-2 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
+              title="Clear filters"
+            >
+              <XIcon className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Filter panel */}
+      {filterOpen && (
+        <div className="card p-4 border-kalbe-200 bg-kalbe-50">
+          <div className="flex flex-col sm:flex-row gap-4 items-end">
+            <div className="flex-1">
+              <label className="label-text">Last Status</label>
+              <input
+                type="text"
+                value={filterLastStatus}
+                onChange={(e) => setFilterLastStatus(e.target.value)}
+                placeholder="e.g. SUBMITTED, WIP..."
+                className="input-field"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="label-text">Receiving Status</label>
+              <input
+                type="text"
+                value={filterReceivingStatus}
+                onChange={(e) => setFilterReceivingStatus(e.target.value)}
+                placeholder="e.g. RECEIVED, PENDING..."
+                className="input-field"
+              />
+            </div>
+            <div className="flex gap-2 flex-shrink-0">
+              <button onClick={applyFilters} className="btn-primary">Apply</button>
+              <button onClick={clearFilters} className="btn-secondary">Clear</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <DataTable
         columns={columns}

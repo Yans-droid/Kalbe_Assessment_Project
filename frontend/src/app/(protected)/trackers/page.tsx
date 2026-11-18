@@ -261,45 +261,55 @@ export default function TrackersPage() {
       key: 'order',
       label: 'Order',
       sortable: true,
-      render: (item) => <span className="text-gray-700 font-mono">{item.order}</span>,
+      render: (item) => <span className="text-gray-700 font-mono block text-center">{item.order}</span>,
     },
     {
       key: 'mandays',
       label: 'Mandays',
       sortable: true,
-      render: (item) => <span className="text-gray-700 font-mono">{item.mandays}</span>,
+      render: (item) => (
+        <span className="text-gray-700 font-mono block text-center">
+          {item.mandays != null && item.mandays < 0 ? '-' : item.mandays}
+        </span>
+      ),
     },
     {
       key: 'isUsingNotification',
       label: 'Notification',
       render: (item) => (
-        item.isUsingNotification ? (
-          <Check className="w-4 h-4 text-kalbe-500" />
-        ) : (
-          <X className="w-4 h-4 text-gray-300" />
-        )
+        <div className="flex justify-center">
+          {item.isUsingNotification ? (
+            <Check className="w-4 h-4 text-kalbe-500" />
+          ) : (
+            <X className="w-4 h-4 text-gray-300" />
+          )}
+        </div>
       ),
     },
     {
       key: 'isPublic',
       label: 'Public',
       render: (item) => (
-        item.isPublic ? (
-          <Check className="w-4 h-4 text-kalbe-500" />
-        ) : (
-          <X className="w-4 h-4 text-gray-300" />
-        )
+        <div className="flex justify-center">
+          {item.isPublic ? (
+            <Check className="w-4 h-4 text-kalbe-500" />
+          ) : (
+            <X className="w-4 h-4 text-gray-300" />
+          )}
+        </div>
       ),
     },
     {
       key: 'isParallel',
       label: 'Parallel',
       render: (item) => (
-        item.isParallel ? (
-          <Check className="w-4 h-4 text-kalbe-500" />
-        ) : (
-          <X className="w-4 h-4 text-gray-300" />
-        )
+        <div className="flex justify-center">
+          {item.isParallel ? (
+            <Check className="w-4 h-4 text-kalbe-500" />
+          ) : (
+            <X className="w-4 h-4 text-gray-300" />
+          )}
+        </div>
       ),
     },
     {

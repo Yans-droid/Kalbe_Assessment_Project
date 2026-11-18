@@ -8,7 +8,6 @@ import {
   FileText,
   GitBranch,
   LogOut,
-  Menu,
   X,
   Loader2,
 } from 'lucide-react';
@@ -21,9 +20,13 @@ const navItems = [
   { href: '/trackings', label: 'Trackings', icon: GitBranch },
 ];
 
-export default function Sidebar() {
+interface SidebarProps {
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+}
+
+export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
   const handleLogout = async () => {
@@ -39,12 +42,21 @@ export default function Sidebar() {
 
   const sidebarContent = (
     <div className="flex flex-col h-full">
-      {/* Logo */}
-      <div className="px-6 py-5 border-b border-kalbe-600">
-        <h1 className="text-xl font-bold text-white tracking-wider">
-          TRACK<span className="text-kalbe-100">LAB</span>
-        </h1>
-        <p className="text-kalbe-200 text-xs mt-0.5">Kalbe Biopharma</p>
+      {/* Logo + close button (mobile) */}
+      <div className="px-6 py-5 border-b border-kalbe-600 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-white tracking-wider">
+            TRACK<span className="text-kalbe-100">LAB</span>
+          </h1>
+          <p className="text-kalbe-200 text-xs mt-0.5">Kalbe Biopharma</p>
+        </div>
+        <button
+          onClick={onMobileClose}
+          className="lg:hidden p-1 rounded text-kalbe-200 hover:text-white"
+          aria-label="Close menu"
+        >
+          <X className="w-5 h-5" />
+        </button>
       </div>
 
       {/* Nav */}
@@ -56,7 +68,7 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              onClick={() => setMobileOpen(false)}
+              onClick={onMobileClose}
               className={cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
                 isActive
@@ -64,7 +76,7 @@ export default function Sidebar() {
                   : 'text-kalbe-100 hover:bg-white/10 hover:text-white'
               )}
             >
-              <Icon className="w-5 h-5" />
+              <Icon className="w-5 h-5 flex-shrink-0" />
               {item.label}
             </Link>
           );
@@ -79,9 +91,9 @@ export default function Sidebar() {
           className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-kalbe-100 hover:bg-white/10 hover:text-white transition-colors w-full"
         >
           {loggingOut ? (
-            <Loader2 className="w-5 h-5 animate-spin" />
+            <Loader2 className="w-5 h-5 animate-spin flex-shrink-0" />
           ) : (
-            <LogOut className="w-5 h-5" />
+            <LogOut className="w-5 h-5 flex-shrink-0" />
           )}
           Logout
         </button>
@@ -91,26 +103,19 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Mobile toggle */}
-      <button
-        onClick={() => setMobileOpen(!mobileOpen)}
-        className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-kalbe-500 text-white rounded-lg shadow-lg"
-      >
-        {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-      </button>
-
-      {/* Mobile overlay */}
+      {/* Mobile overlay backdrop */}
       {mobileOpen && (
         <div
           className="lg:hidden fixed inset-0 bg-black/50 z-40"
-          onClick={() => setMobileOpen(false)}
+          onClick={onMobileClose}
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar — fixed on desktop, slide-over on mobile */}
       <aside
         className={cn(
-          'fixed lg:static inset-y-0 left-0 z-40 w-64 bg-kalbe-500 transform transition-transform duration-200 ease-in-out lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 w-64 bg-kalbe-500 transform transition-transform duration-200 ease-in-out',
+          'lg:translate-x-0',
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
