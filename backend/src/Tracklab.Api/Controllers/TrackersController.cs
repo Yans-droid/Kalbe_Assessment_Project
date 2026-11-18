@@ -28,8 +28,12 @@ public class TrackersController : ControllerBase
         _logger = logger;
     }
 
-    private IActionResult Unauthorized401() =>
-        Unauthorized(new { message = "Authentication required." });
+    private IActionResult Unauthorized401()
+    {
+        var isDev = HttpContext.RequestServices.GetService<IWebHostEnvironment>()?.IsDevelopment() ?? false;
+        TokenCookieHelper.ClearCookies(Response, isDev);
+        return Unauthorized(new { message = "Authentication required." });
+    }
 
     private (string? accessToken, string? username, bool ok) GetAuth()
     {

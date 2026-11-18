@@ -45,7 +45,7 @@ export default function Header({ title, onMenuClick }: HeaderProps) {
     } catch {
       // ignore
     } finally {
-      window.location.href = '/login';
+      window.location.href = '/login?logout=true';
     }
   };
 

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
+using Tracklab.Api.Infrastructure;
 
 namespace Tracklab.Api.Middleware;
 
@@ -43,6 +44,12 @@ public class ExceptionHandlingMiddleware
                 (HttpStatusCode.BadGateway, "Upstream service error"),
             _ => (HttpStatusCode.InternalServerError, "An unexpected error occurred")
         };
+
+        if (status == HttpStatusCode.Unauthorized)
+        {
+            // Clear auth cookies on 401 so the browser doesn't get stuck in an infinite loop
+            TokenCookieHelper.ClearCookies(context.Response, _env.IsDevelopment());
+        }
 
         var problem = new ProblemDetails
         {

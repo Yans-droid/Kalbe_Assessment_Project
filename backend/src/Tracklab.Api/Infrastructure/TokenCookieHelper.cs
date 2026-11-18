@@ -10,6 +10,7 @@ public static class TokenCookieHelper
     {
         var opts = new CookieOptions
         {
+            Path = "/",
             HttpOnly = true,
             SameSite = SameSiteMode.Lax,
             Secure = !isDev,
@@ -22,6 +23,7 @@ public static class TokenCookieHelper
         {
             var sessionOpts = new CookieOptions
             {
+                Path = "/",
                 HttpOnly = true,
                 SameSite = SameSiteMode.Strict,
                 Secure = !isDev,
@@ -32,6 +34,7 @@ public static class TokenCookieHelper
 
         var userOpts = new CookieOptions
         {
+            Path = "/",
             HttpOnly = true,
             SameSite = SameSiteMode.Lax,
             Secure = !isDev,
@@ -49,10 +52,32 @@ public static class TokenCookieHelper
     public static string? GetUsername(HttpRequest request)
         => request.Cookies[UserCookie];
 
-    public static void ClearCookies(HttpResponse response)
+    public static void ClearCookies(HttpResponse response, bool isDev = false)
     {
-        response.Cookies.Delete(AccessCookie);
-        response.Cookies.Delete(SessionCookie);
-        response.Cookies.Delete(UserCookie);
+        var deleteOpts = new CookieOptions
+        {
+            Path = "/",
+            HttpOnly = true,
+            SameSite = SameSiteMode.Lax,
+            Secure = !isDev,
+            Expires = DateTimeOffset.UtcNow.AddDays(-1)
+        };
+        response.Cookies.Delete(AccessCookie, deleteOpts);
+        response.Cookies.Delete(UserCookie, deleteOpts);
+
+        var sessionDeleteOpts = new CookieOptions
+        {
+            Path = "/",
+            HttpOnly = true,
+            SameSite = SameSiteMode.Strict,
+            Secure = !isDev,
+            Expires = DateTimeOffset.UtcNow.AddDays(-1)
+        };
+        response.Cookies.Delete(SessionCookie, sessionDeleteOpts);
+
+        // Fallback delete with root path
+        response.Cookies.Delete(AccessCookie, new CookieOptions { Path = "/" });
+        response.Cookies.Delete(SessionCookie, new CookieOptions { Path = "/" });
+        response.Cookies.Delete(UserCookie, new CookieOptions { Path = "/" });
     }
 }

@@ -19,7 +19,10 @@ export async function apiFetch<T>(url: string, options?: RequestInit): Promise<T
 
   if (res.status === 401) {
     if (typeof window !== 'undefined') {
-      window.location.href = '/login';
+      // Best-effort call logout to ensure backend clears httpOnly cookies
+      fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+      // Redirect with expired flag to prevent Next.js middleware loop
+      window.location.href = '/login?expired=true';
     }
     throw new ApiError('Unauthorized', 401);
   }

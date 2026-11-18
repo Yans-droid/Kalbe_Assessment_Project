@@ -55,10 +55,20 @@ public class AuthController : ControllerBase
         var accessToken = TokenCookieHelper.GetAccessToken(Request);
         var username = TokenCookieHelper.GetUsername(Request) ?? "unknown";
 
-        if (!string.IsNullOrEmpty(accessToken))
-            await _auth.LogoutAsync(username, accessToken);
+        try
+        {
+            if (!string.IsNullOrEmpty(accessToken))
+                await _auth.LogoutAsync(username, accessToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("Upstream logout failed or token already invalid: {Msg}", ex.Message);
+        }
+        finally
+        {
+            TokenCookieHelper.ClearCookies(Response, _env.IsDevelopment());
+        }
 
-        TokenCookieHelper.ClearCookies(Response);
         return Ok(new { message = "Logged out." });
     }
 
@@ -69,7 +79,10 @@ public class AuthController : ControllerBase
         var username = TokenCookieHelper.GetUsername(Request);
 
         if (string.IsNullOrEmpty(accessToken) || string.IsNullOrEmpty(username))
+        {
+            TokenCookieHelper.ClearCookies(Response, _env.IsDevelopment());
             return Unauthorized(new { message = "Not authenticated." });
+        }
 
         return Ok(new { username });
     }
