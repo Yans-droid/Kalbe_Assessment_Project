@@ -55,6 +55,7 @@ public class ExceptionHandlingMiddleware
         {
             Status = (int)status,
             Title = title,
+            Detail = _env.IsDevelopment() ? ex.Message : title,
             Instance = context.Request.Path
         };
 

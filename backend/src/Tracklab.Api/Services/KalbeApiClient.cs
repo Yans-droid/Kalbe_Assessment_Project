@@ -98,7 +98,12 @@ public class KalbeApiClient
             req.Headers.TryAddWithoutValidation("Cookie", sessionCookie);
 
         var resp = await _httpClient.SendAsync(req);
-        resp.EnsureSuccessStatusCode();
+        if (!resp.IsSuccessStatusCode)
+        {
+            var errJson = await resp.Content.ReadAsStringAsync();
+            _logger.LogError("Kalbe API RefreshToken failed with {Status}: {Body}", resp.StatusCode, errJson);
+            throw new HttpRequestException($"Kalbe upstream returned {resp.StatusCode}: {errJson}", null, resp.StatusCode);
+        }
 
         var json = await resp.Content.ReadAsStringAsync();
         var result = JsonSerializer.Deserialize<KalbeResponse<KalbeTokenData>>(json, _jsonOptions);
@@ -122,21 +127,235 @@ public class KalbeApiClient
     }
 
     /// <summary>
-    /// Generic paged GET: GET /{entity}/paging/advance
+    /// Generic paged GET: GET /{entity}/paging/advance with intelligent multi-strategy retry and graceful fallback
     /// </summary>
     public async Task<KalbePagingData<T>?> GetPagedAsync<T>(string entity, PagingQuery query, string accessToken, IReadOnlySet<string> allowedSortFields)
+    {
+        var hasFilter = !string.IsNullOrWhiteSpace(query.IncludeRaw) || query.Include is { Count: > 0 };
+
+        // 1. Try standard request with PagingHeaderBuilder
+        var req = CreatePagedRequest(entity, query, accessToken, allowedSortFields);
+        var resp = await _httpClient.SendAsync(req);
+
+        if (resp.IsSuccessStatusCode)
+        {
+            var json = await resp.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<KalbeResponse<KalbePagingData<T>>>(json, _jsonOptions);
+            return result?.Data;
+        }
+
+        var errJson = await resp.Content.ReadAsStringAsync();
+        _logger.LogWarning("Kalbe API {Entity} paging failed with {Status}: {Body}", entity, resp.StatusCode, errJson);
+
+        // If not 500 or no filter was passed, throw directly as normal
+        if (resp.StatusCode != HttpStatusCode.InternalServerError || !hasFilter)
+        {
+            throw new HttpRequestException($"Kalbe upstream returned {resp.StatusCode}: {errJson}", null, resp.StatusCode);
+        }
+
+        // Parse filters
+        var parsedFilters = ParseFilters(query.IncludeRaw, query.Include);
+
+        // 2. If 500 occurred with filter, try variation: PascalCase headers without extra flags
+        try
+        {
+            var altInclude = BuildPascalCaseInclude(parsedFilters);
+            if (!string.IsNullOrWhiteSpace(altInclude))
+            {
+                var altQuery = new PagingQuery
+                {
+                    Page = query.Page,
+                    PageSize = query.PageSize,
+                    Search = query.Search,
+                    SortBy = query.SortBy,
+                    SortOrder = query.SortOrder,
+                    Operator = null,
+                    IncludeRaw = altInclude
+                };
+                var altReq = CreatePagedRequest(entity, altQuery, accessToken, allowedSortFields, omitExtraHeaders: true);
+                var altResp = await _httpClient.SendAsync(altReq);
+                if (altResp.IsSuccessStatusCode)
+                {
+                    var altJson = await altResp.Content.ReadAsStringAsync();
+                    var altResult = JsonSerializer.Deserialize<KalbeResponse<KalbePagingData<T>>>(altJson, _jsonOptions);
+                    _logger.LogInformation("Kalbe API {Entity} paging succeeded with PascalCase include filter", entity);
+                    return altResult?.Data;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "PascalCase include filter attempt failed");
+        }
+
+        // 3. Graceful Fallback: Upstream server returned 500 on X-Paging-Include.
+        // Fetch base data without the filter header and perform in-memory filtering.
+        _logger.LogWarning("Kalbe API {Entity} advance filter returned 500; executing graceful fallback with BFF post-filtering", entity);
+
+        var fallbackQuery = new PagingQuery
+        {
+            Page = 1,
+            PageSize = 100, // retrieve full set from Kalbe upstream (~20-50 items)
+            Search = query.Search,
+            SortBy = query.SortBy,
+            SortOrder = query.SortOrder
+        };
+        var fallbackReq = CreatePagedRequest(entity, fallbackQuery, accessToken, allowedSortFields);
+        var fallbackResp = await _httpClient.SendAsync(fallbackReq);
+        if (!fallbackResp.IsSuccessStatusCode)
+        {
+            var fbErr = await fallbackResp.Content.ReadAsStringAsync();
+            throw new HttpRequestException($"Kalbe upstream fallback returned {fallbackResp.StatusCode}: {fbErr}", null, fallbackResp.StatusCode);
+        }
+
+        var fallbackJson = await fallbackResp.Content.ReadAsStringAsync();
+        var fallbackResult = JsonSerializer.Deserialize<KalbeResponse<KalbePagingData<T>>>(fallbackJson, _jsonOptions);
+        var rawData = fallbackResult?.Data;
+        if (rawData == null) return null;
+
+        var allItems = rawData.Items ?? new List<T>();
+        var filtered = allItems.Where(it => MatchesFilter(it, parsedFilters)).ToList();
+
+        var page = Math.Max(1, query.Page);
+        var limit = Math.Clamp(query.PageSize, 1, 100);
+        var pagedItems = filtered.Skip((page - 1) * limit).Take(limit).ToList();
+
+        return new KalbePagingData<T>
+        {
+            Items = pagedItems,
+            TotalItems = filtered.Count,
+            TotalPages = Math.Max(1, (int)Math.Ceiling((double)filtered.Count / limit)),
+            PageCurrent = page,
+            Limit = limit,
+            Offset = (page - 1) * limit,
+            SortBy = query.SortBy,
+            SortOrder = query.SortOrder
+        };
+    }
+
+    private HttpRequestMessage CreatePagedRequest(
+        string entity,
+        PagingQuery query,
+        string accessToken,
+        IReadOnlySet<string> allowedSortFields,
+        bool omitExtraHeaders = false)
     {
         var req = new HttpRequestMessage(HttpMethod.Get, $"{FeaturePath(entity)}/paging/advance");
         AddAppHeaders(req);
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        PagingHeaderBuilder.Apply(req, query, allowedSortFields);
+        if (omitExtraHeaders)
+        {
+            var page = Math.Max(1, query.Page);
+            var limit = Math.Clamp(query.PageSize, 1, 100);
+            req.Headers.Add("X-Paging-Offset", ((page - 1) * limit).ToString());
+            req.Headers.Add("X-Paging-Limit", limit.ToString());
+            if (!string.IsNullOrWhiteSpace(query.SortBy) && allowedSortFields.Contains(query.SortBy))
+            {
+                req.Headers.Add("X-Paging-SortBy", query.SortBy);
+                req.Headers.Add("X-Paging-SortOrder", query.SortOrder?.ToUpper() == "DESC" ? "DESC" : "ASC");
+            }
+            if (!string.IsNullOrWhiteSpace(query.Search))
+            {
+                req.Headers.Add("X-Paging-Search", query.Search.Trim());
+            }
+            if (!string.IsNullOrWhiteSpace(query.IncludeRaw))
+            {
+                req.Headers.Add("X-Paging-Include", query.IncludeRaw.Trim());
+            }
+        }
+        else
+        {
+            PagingHeaderBuilder.Apply(req, query, allowedSortFields);
+        }
+        return req;
+    }
 
-        var resp = await _httpClient.SendAsync(req);
-        resp.EnsureSuccessStatusCode();
+    private static string? BuildPascalCaseInclude(List<KeyValuePair<string, string>> filters)
+    {
+        if (filters.Count == 0) return null;
+        var list = new List<Dictionary<string, string>>();
+        foreach (var f in filters)
+        {
+            if (string.IsNullOrWhiteSpace(f.Key)) continue;
+            var pascalKey = char.ToUpperInvariant(f.Key[0]) + f.Key.Substring(1);
+            list.Add(new Dictionary<string, string> { { pascalKey, f.Value } });
+        }
+        var json = JsonSerializer.Serialize(list);
+        return Convert.ToBase64String(Encoding.UTF8.GetBytes(json));
+    }
 
-        var json = await resp.Content.ReadAsStringAsync();
-        var result = JsonSerializer.Deserialize<KalbeResponse<KalbePagingData<T>>>(json, _jsonOptions);
-        return result?.Data;
+    private static List<KeyValuePair<string, string>> ParseFilters(string? includeRaw, List<Dictionary<string, string>>? include)
+    {
+        var result = new List<KeyValuePair<string, string>>();
+        if (include is { Count: > 0 })
+        {
+            foreach (var dict in include)
+            {
+                foreach (var kvp in dict)
+                {
+                    if (!string.IsNullOrWhiteSpace(kvp.Key) && !string.IsNullOrWhiteSpace(kvp.Value))
+                        result.Add(new KeyValuePair<string, string>(kvp.Key, kvp.Value.Trim()));
+                }
+            }
+            return result;
+        }
+
+        if (string.IsNullOrWhiteSpace(includeRaw)) return result;
+
+        try
+        {
+            var json = Encoding.UTF8.GetString(Convert.FromBase64String(includeRaw.Trim()));
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var elem in doc.RootElement.EnumerateArray())
+                {
+                    if (elem.ValueKind == JsonValueKind.Object)
+                    {
+                        foreach (var prop in elem.EnumerateObject())
+                        {
+                            var val = prop.Value.GetString();
+                            if (!string.IsNullOrWhiteSpace(val))
+                                result.Add(new KeyValuePair<string, string>(prop.Name, val.Trim()));
+                        }
+                    }
+                }
+            }
+            else if (doc.RootElement.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var prop in doc.RootElement.EnumerateObject())
+                {
+                    var val = prop.Value.GetString();
+                    if (!string.IsNullOrWhiteSpace(val))
+                        result.Add(new KeyValuePair<string, string>(prop.Name, val.Trim()));
+                }
+            }
+        }
+        catch
+        {
+            // best-effort parse
+        }
+
+        return result;
+    }
+
+    private static bool MatchesFilter<T>(T item, List<KeyValuePair<string, string>> filters)
+    {
+        if (filters.Count == 0) return true;
+        var props = typeof(T).GetProperties();
+        foreach (var filter in filters)
+        {
+            var prop = props.FirstOrDefault(p => string.Equals(p.Name, filter.Key, StringComparison.OrdinalIgnoreCase));
+            if (prop == null) continue;
+            var val = prop.GetValue(item)?.ToString();
+            if (string.IsNullOrWhiteSpace(val)) return false;
+            if (!val.Contains(filter.Value, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(val, filter.Value, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     /// <summary>
@@ -149,7 +368,12 @@ public class KalbeApiClient
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
         var resp = await _httpClient.SendAsync(req);
-        resp.EnsureSuccessStatusCode();
+        if (!resp.IsSuccessStatusCode)
+        {
+            var errJson = await resp.Content.ReadAsStringAsync();
+            _logger.LogError("Kalbe API {Entity} getById failed with {Status}: {Body}", entity, resp.StatusCode, errJson);
+            throw new HttpRequestException($"Kalbe upstream returned {resp.StatusCode}: {errJson}", null, resp.StatusCode);
+        }
 
         var json = await resp.Content.ReadAsStringAsync();
         var result = JsonSerializer.Deserialize<KalbeResponse<T>>(json, _jsonOptions);
@@ -170,7 +394,12 @@ public class KalbeApiClient
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
         var resp = await _httpClient.SendAsync(req);
-        resp.EnsureSuccessStatusCode();
+        if (!resp.IsSuccessStatusCode)
+        {
+            var errJson = await resp.Content.ReadAsStringAsync();
+            _logger.LogError("Kalbe API {Entity} create failed with {Status}: {Body}", entity, resp.StatusCode, errJson);
+            throw new HttpRequestException($"Kalbe upstream returned {resp.StatusCode}: {errJson}", null, resp.StatusCode);
+        }
 
         var json = await resp.Content.ReadAsStringAsync();
         var result = JsonSerializer.Deserialize<KalbeResponse<T>>(json, _jsonOptions);
@@ -191,7 +420,12 @@ public class KalbeApiClient
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
         var resp = await _httpClient.SendAsync(req);
-        resp.EnsureSuccessStatusCode();
+        if (!resp.IsSuccessStatusCode)
+        {
+            var errJson = await resp.Content.ReadAsStringAsync();
+            _logger.LogError("Kalbe API {Entity} update failed with {Status}: {Body}", entity, resp.StatusCode, errJson);
+            throw new HttpRequestException($"Kalbe upstream returned {resp.StatusCode}: {errJson}", null, resp.StatusCode);
+        }
 
         var json = await resp.Content.ReadAsStringAsync();
         var result = JsonSerializer.Deserialize<KalbeResponse<T>>(json, _jsonOptions);

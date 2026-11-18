@@ -30,7 +30,7 @@ public class RequestLoggingMiddleware
 
         var user = TokenCookieHelper.GetUsername(context.Request) ?? "anonymous";
         var method = context.Request.Method;
-        var path = context.Request.Path.Value ?? "/";
+        var path = (context.Request.Path.Value ?? "/") + context.Request.QueryString;
         var status = context.Response.StatusCode;
         var durationMs = sw.ElapsedMilliseconds;
 
