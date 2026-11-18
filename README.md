@@ -102,7 +102,6 @@ Kalbe_Project/
 │   │   └── middleware.ts        # Route protection via session cookies
 │   ├── package.json
 │   └── vitest.config.ts         # 26 Vitest unit tests for schemas & formatters
-├── implementation_plan.md
 └── README.md
 ```
 

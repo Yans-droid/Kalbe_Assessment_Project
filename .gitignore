@@ -23,6 +23,9 @@ frontend/out/
 .env.*.local
 *.env
 
+# Internal notes & plans
+implementation*.md
+
 # OS
 .DS_Store
 Thumbs.db
