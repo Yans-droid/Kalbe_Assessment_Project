@@ -132,6 +132,8 @@ public class KalbeApiClient
     public async Task<KalbePagingData<T>?> GetPagedAsync<T>(string entity, PagingQuery query, string accessToken, IReadOnlySet<string> allowedSortFields)
     {
         var hasFilter = !string.IsNullOrWhiteSpace(query.IncludeRaw) || query.Include is { Count: > 0 };
+        var searchTerm = query.Search?.Trim('%').Trim();
+        var parsedFilters = ParseFilters(query.IncludeRaw, query.Include);
 
         // 1. Try standard request with PagingHeaderBuilder
         var req = CreatePagedRequest(entity, query, accessToken, allowedSortFields);
@@ -141,7 +143,21 @@ public class KalbeApiClient
         {
             var json = await resp.Content.ReadAsStringAsync();
             var result = JsonSerializer.Deserialize<KalbeResponse<KalbePagingData<T>>>(json, _jsonOptions);
-            return result?.Data;
+            var data = result?.Data;
+
+            // If a search term was provided, verify that Kalbe upstream actually applied it.
+            // If Kalbe ignored the search term (returning non-matching items), perform BFF search filtering.
+            if (data != null && !string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var hasNonMatching = data.Items.Any(item => !MatchesSearch(item, searchTerm));
+                if (hasNonMatching)
+                {
+                    _logger.LogInformation("Kalbe API {Entity} returned unfiltered items for search '{Search}'; applying BFF search filter", entity, searchTerm);
+                    return await FetchAndFilterAllAsync<T>(entity, query, accessToken, allowedSortFields, searchTerm, hasFilter ? parsedFilters : null);
+                }
+            }
+
+            return data;
         }
 
         var errJson = await resp.Content.ReadAsStringAsync();
@@ -152,9 +168,6 @@ public class KalbeApiClient
         {
             throw new HttpRequestException($"Kalbe upstream returned {resp.StatusCode}: {errJson}", null, resp.StatusCode);
         }
-
-        // Parse filters
-        var parsedFilters = ParseFilters(query.IncludeRaw, query.Include);
 
         // 2. If 500 occurred with filter, try variation: PascalCase headers without extra flags
         try
@@ -178,8 +191,17 @@ public class KalbeApiClient
                 {
                     var altJson = await altResp.Content.ReadAsStringAsync();
                     var altResult = JsonSerializer.Deserialize<KalbeResponse<KalbePagingData<T>>>(altJson, _jsonOptions);
+                    var altData = altResult?.Data;
+                    if (altData != null && !string.IsNullOrWhiteSpace(searchTerm))
+                    {
+                        var hasNonMatching = altData.Items.Any(item => !MatchesSearch(item, searchTerm));
+                        if (hasNonMatching)
+                        {
+                            return await FetchAndFilterAllAsync<T>(entity, query, accessToken, allowedSortFields, searchTerm, parsedFilters);
+                        }
+                    }
                     _logger.LogInformation("Kalbe API {Entity} paging succeeded with PascalCase include filter", entity);
-                    return altResult?.Data;
+                    return altData;
                 }
             }
         }
@@ -191,30 +213,46 @@ public class KalbeApiClient
         // 3. Graceful Fallback: Upstream server returned 500 on X-Paging-Include.
         // Fetch base data without the filter header and perform in-memory filtering.
         _logger.LogWarning("Kalbe API {Entity} advance filter returned 500; executing graceful fallback with BFF post-filtering", entity);
+        return await FetchAndFilterAllAsync<T>(entity, query, accessToken, allowedSortFields, searchTerm, parsedFilters);
+    }
 
-        var fallbackQuery = new PagingQuery
+    private async Task<KalbePagingData<T>?> FetchAndFilterAllAsync<T>(
+        string entity,
+        PagingQuery query,
+        string accessToken,
+        IReadOnlySet<string> allowedSortFields,
+        string? searchTerm,
+        List<KeyValuePair<string, string>>? parsedFilters)
+    {
+        var baseQuery = new PagingQuery
         {
             Page = 1,
-            PageSize = 100, // retrieve full set from Kalbe upstream (~20-50 items)
-            Search = query.Search,
+            PageSize = 100, // retrieve complete batch from Kalbe (~20-50 items)
             SortBy = query.SortBy,
             SortOrder = query.SortOrder
         };
-        var fallbackReq = CreatePagedRequest(entity, fallbackQuery, accessToken, allowedSortFields);
-        var fallbackResp = await _httpClient.SendAsync(fallbackReq);
-        if (!fallbackResp.IsSuccessStatusCode)
+        var req = CreatePagedRequest(entity, baseQuery, accessToken, allowedSortFields, omitExtraHeaders: true);
+        var resp = await _httpClient.SendAsync(req);
+        if (!resp.IsSuccessStatusCode)
         {
-            var fbErr = await fallbackResp.Content.ReadAsStringAsync();
-            throw new HttpRequestException($"Kalbe upstream fallback returned {fallbackResp.StatusCode}: {fbErr}", null, fallbackResp.StatusCode);
+            var fbErr = await resp.Content.ReadAsStringAsync();
+            throw new HttpRequestException($"Kalbe upstream fallback returned {resp.StatusCode}: {fbErr}", null, resp.StatusCode);
         }
 
-        var fallbackJson = await fallbackResp.Content.ReadAsStringAsync();
-        var fallbackResult = JsonSerializer.Deserialize<KalbeResponse<KalbePagingData<T>>>(fallbackJson, _jsonOptions);
-        var rawData = fallbackResult?.Data;
+        var json = await resp.Content.ReadAsStringAsync();
+        var result = JsonSerializer.Deserialize<KalbeResponse<KalbePagingData<T>>>(json, _jsonOptions);
+        var rawData = result?.Data;
         if (rawData == null) return null;
 
         var allItems = rawData.Items ?? new List<T>();
-        var filtered = allItems.Where(it => MatchesFilter(it, parsedFilters)).ToList();
+        var filtered = allItems.Where(it =>
+        {
+            if (!string.IsNullOrWhiteSpace(searchTerm) && !MatchesSearch(it, searchTerm))
+                return false;
+            if (parsedFilters != null && parsedFilters.Count > 0 && !MatchesFilter(it, parsedFilters))
+                return false;
+            return true;
+        }).ToList();
 
         var page = Math.Max(1, query.Page);
         var limit = Math.Clamp(query.PageSize, 1, 100);
@@ -360,6 +398,27 @@ public class KalbeApiClient
             }
         }
         return true;
+    }
+
+    private static bool MatchesSearch<T>(T item, string search)
+    {
+        if (string.IsNullOrWhiteSpace(search) || search == "%") return true;
+        var term = search.Trim('%').Trim();
+        if (string.IsNullOrEmpty(term)) return true;
+
+        var props = typeof(T).GetProperties();
+        foreach (var prop in props)
+        {
+            if (prop.PropertyType == typeof(string) || prop.PropertyType.IsPrimitive || prop.PropertyType == typeof(decimal))
+            {
+                var val = prop.GetValue(item)?.ToString();
+                if (!string.IsNullOrEmpty(val) && val.Contains(term, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /// <summary>

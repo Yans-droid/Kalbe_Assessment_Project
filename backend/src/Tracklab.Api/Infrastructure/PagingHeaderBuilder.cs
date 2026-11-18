@@ -19,8 +19,17 @@ public static class PagingHeaderBuilder
             req.Headers.Add("X-Paging-SortOrder", q.SortOrder?.ToUpper() == "DESC" ? "DESC" : "ASC");
         }
 
-        // Default wildcard '%' per verified Kalbe API behaviour
-        req.Headers.Add("X-Paging-Search", string.IsNullOrWhiteSpace(q.Search) ? "%" : q.Search.Trim());
+        // Search header: default wildcard '%' per verified Kalbe API behaviour; wrap keyword as %{keyword}%
+        if (string.IsNullOrWhiteSpace(q.Search))
+        {
+            req.Headers.Add("X-Paging-Search", "%");
+        }
+        else
+        {
+            var s = q.Search.Trim();
+            var formatted = s.StartsWith('%') || s.EndsWith('%') ? s : $"%{s}%";
+            req.Headers.Add("X-Paging-Search", formatted);
+        }
 
         if (!string.IsNullOrWhiteSpace(q.IncludeRaw))
         {

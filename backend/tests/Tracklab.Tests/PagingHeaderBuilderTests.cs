@@ -63,7 +63,7 @@ public class PagingHeaderBuilderTests
 
         PagingHeaderBuilder.Apply(req, q, AllowedSorts);
 
-        Assert.Equal("hello", req.Headers.GetValues("X-Paging-Search").First());
+        Assert.Equal("%hello%", req.Headers.GetValues("X-Paging-Search").First());
     }
 
     [Fact]
